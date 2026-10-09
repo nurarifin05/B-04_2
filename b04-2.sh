@@ -1,9 +1,32 @@
 #!/bin/bash
 # ==============================================================================
-# Script Setup Lab VM-02: Compromised Application Server
+# Script Setup Lab VM-02: Compromised Application Server (Ubuntu 24.04 LTS)
 # ==============================================================================
 
+# Pastikan script dijalankan sebagai root/sudo
+if [ "$EUID" -ne 0 ]; then
+  echo "[!] Dilarang menjalankan script ini tanpa akses root. Gunakan: sudo $0"
+  exit 1
+fi
+
+export DEBIAN_FRONTEND=noninteractive
+
+echo "[+] Menginstal dependensi sistem (MySQL Server, OpenSSL, Zip, Unzip)..."
+apt-get update -qq
+apt-get install -y -qq mysql-server openssl zip unzip hashcat > /dev/null
+
+echo "[+] Memastikan service MySQL berjalan..."
+systemctl start mysql
+systemctl enable mysql > /dev/null 2>&1
+
 TARGET_DIR="/home/student/lab"
+
+# Membuat user student jika belum ada di mesin VM
+if ! id "student" &>/dev/null; then
+    echo "[+] Membuat user 'student'..."
+    useradd -m -s /bin/bash student
+    echo "student:student123" | chpasswd
+fi
 
 echo "[+] Menyiapkan struktur folder lab..."
 mkdir -p "$TARGET_DIR/dumps"
@@ -24,8 +47,8 @@ Wordlist tersedia di: wordlists/corporate_keywords.txt
 EOF
 
 # 2. Setup Database MySQL
-echo "[+] Mengonfigurasi Database MySQL..."
-sudo mysql << 'EOF'
+echo "[+] Mengonfigurasi Database MySQL & Akses User..."
+mysql << 'EOF'
 CREATE DATABASE IF NOT EXISTS company_app;
 
 CREATE USER IF NOT EXISTS 'db_student'@'localhost' IDENTIFIED BY 'student123';
@@ -89,12 +112,13 @@ admin2026
 EOF
 
 # 4. Membikin file terenkripsi untuk Challenge 8
-sudo mkdir -p /var/backups
+mkdir -p /var/backups
 echo "FLAG{ADMIN_BACKUP_DECRYPTED_SUCCESSFULLY}" | openssl enc -aes-256-cbc -pbkdf2 -out /var/backups/admin_data.enc -k "Company2026!" 2>/dev/null
 
-# Hak akses direktori
+# Set hak milik dan akses direktori
+chown -R student:student /home/student
 chmod -R 755 "$TARGET_DIR"
 
 echo "==================================================================="
-echo "[+] Setup Lab VM-02 Selesai!"
+echo "[+] Setup Lab VM-02 di Ubuntu 24 Selesai!"
 echo "==================================================================="
